@@ -2,6 +2,11 @@
 
 A CLI utility to aid the migration of R53 records from an old hosted zone to a new one.
 
+Outputs three JSON files:
+* `old.json` - A list of all records in the old hosted zone
+* `new.json` - A list of all records in the new hosted zone
+* `diff.json` - A list of missing records in the new hosted zone and a list of mistmached records (same name and type but different property values)
+
 # Usage
 ```
 Usage of ./bin/r53-migrate:
