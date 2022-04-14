@@ -42,13 +42,15 @@ func getHostedZoneId(ctx context.Context, client *route53.Client, hostedZoneName
 		return "", err
 	}
 
+	var errHostedZoneList []string
 	for _, hostedZone := range hostedZoneList.HostedZones {
+		errHostedZoneList = append(errHostedZoneList, *hostedZone.Name)
 		if *hostedZone.Name == hostedZoneName {
 			return *hostedZone.Id, nil
 		}
 	}
 
-	return "", fmt.Errorf("could not find hosted zone with name %s", hostedZoneName)
+	return "", fmt.Errorf("could not find hosted zone with name %s\nhost zone list: %v", hostedZoneName, errHostedZoneList)
 }
 
 func getRecords(ctx context.Context, client *route53.Client, hostedZoneId string) (records []route53Types.ResourceRecordSet, err error) {
