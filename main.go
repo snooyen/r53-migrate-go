@@ -106,6 +106,15 @@ func getRecordsDiff(oldRecords []route53Types.ResourceRecordSet, newRecords []ro
 	return diff, err
 }
 
+func dumpRecordsJson(file string, data interface{}) (err error) {
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	err = ioutil.WriteFile(file, jsonData, 0644)
+	return
+}
+
 func main() {
 	flag.Parse()
 	ctx := context.Background()
@@ -156,29 +165,19 @@ func main() {
 	// Output Results
 	log.Printf("# Missing Records: %d\t# Mismatched Records: %d", len(diff.Missing), len(diff.Mismatched))
 	if *dumpJson {
-		oldRecordsJson, err := json.Marshal(oldRecords)
+		err = dumpRecordsJson("old.json", oldRecords)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = ioutil.WriteFile("old.json", oldRecordsJson, 0644)
+		err = dumpRecordsJson("new.json", newRecords)
 		if err != nil {
 			log.Fatal(err)
 		}
-
-		newRecordsJson, err := json.Marshal(newRecords)
+		err = dumpRecordsJson("mismatched.json", diff.Mismatched)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = ioutil.WriteFile("new.json", newRecordsJson, 0644)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		diffJson, err := json.Marshal(diff)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = ioutil.WriteFile("diff.json", diffJson, 0644)
+		err = dumpRecordsJson("missing.json", diff.Missing)
 		if err != nil {
 			log.Fatal(err)
 		}
