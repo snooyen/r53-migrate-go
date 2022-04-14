@@ -140,7 +140,7 @@ func main() {
 		log.Printf("New Hosted Zone ID: %s", hostedZoneIdNew)
 
 		// Get New Hosted Zone Records
-		newRecords, err := getRecords(ctx, clientNew, hostedZoneIdNew)
+		newRecords, err = getRecords(ctx, clientNew, hostedZoneIdNew)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -160,18 +160,27 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		_ = ioutil.WriteFile("old.json", oldRecordsJson, 0644)
+		err = ioutil.WriteFile("old.json", oldRecordsJson, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		newRecordsJson, err := json.Marshal(newRecords)
 		if err != nil {
 			log.Fatal(err)
 		}
-		_ = ioutil.WriteFile("new.json", newRecordsJson, 0644)
+		err = ioutil.WriteFile("new.json", newRecordsJson, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		diffJson, err := json.Marshal(diff)
 		if err != nil {
 			log.Fatal(err)
 		}
-		_ = ioutil.WriteFile("diff.json", diffJson, 0644)
+		err = ioutil.WriteFile("diff.json", diffJson, 0644)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
