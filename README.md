@@ -20,6 +20,8 @@ Usage of ./bin/r53-migrate:
 ```
 
 # Build and Run
+## Prerequisites
+- go version go1.17.6
 
 ```shell
 $ make build
