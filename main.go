@@ -79,13 +79,19 @@ type ResourceRecordSetDiff struct {
 	}
 }
 
+var SkipMismatchRecordTypes = map[string]bool{
+	"NS":  true,
+	"SOA": true,
+}
+
 func getRecordsDiff(oldRecords []route53Types.ResourceRecordSet, newRecords []route53Types.ResourceRecordSet) (diff ResourceRecordSetDiff, err error) {
 	for _, oldRecord := range oldRecords {
 		found := false
 		for _, newRecord := range newRecords {
 			if (*oldRecord.Name == *newRecord.Name) && (oldRecord.Type == newRecord.Type) {
 				found = true
-				if !reflect.DeepEqual(oldRecord, newRecord) {
+				_, skipMismatch := SkipMismatchRecordTypes[string(oldRecord.Type)]
+				if !skipMismatch && !reflect.DeepEqual(oldRecord, newRecord) {
 					diff.Mismatched = append(diff.Mismatched,
 						struct {
 							Old route53Types.ResourceRecordSet
@@ -165,19 +171,19 @@ func main() {
 	// Output Results
 	log.Printf("# Missing Records: %d\t# Mismatched Records: %d", len(diff.Missing), len(diff.Mismatched))
 	if *dumpJson {
-		err = dumpRecordsJson("old.json", oldRecords)
+		err = dumpRecordsJson(fmt.Sprintf("old.%s.json", *hostedZoneNameOld), oldRecords)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = dumpRecordsJson("new.json", newRecords)
+		err = dumpRecordsJson(fmt.Sprintf("new.%s.json", *hostedZoneNameNew), newRecords)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = dumpRecordsJson("mismatched.json", diff.Mismatched)
+		err = dumpRecordsJson(fmt.Sprintf("mismatched.%s.json", *hostedZoneNameOld), diff.Mismatched)
 		if err != nil {
 			log.Fatal(err)
 		}
-		err = dumpRecordsJson("missing.json", diff.Missing)
+		err = dumpRecordsJson(fmt.Sprintf("missing.%s.json", *hostedZoneNameOld), diff.Missing)
 		if err != nil {
 			log.Fatal(err)
 		}
