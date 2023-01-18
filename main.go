@@ -15,10 +15,10 @@ import (
 )
 
 var (
-	awsProfileOld     = flag.String("aws-profile-old", "", "AWS profile to use for old records")
-	awsProfileNew     = flag.String("aws-profile-new", "", "AWS profile to use for new records")
-	hostedZoneNameOld = flag.String("hosted-zone-name-old", "mydomain.com.", "Hosted zone name to use for old records")
-	hostedZoneNameNew = flag.String("hosted-zone-name-new", "mydomain.com.", "Hosted zone name to use for new records")
+	awsProfileOld     = flag.String("aws-profile-old", "brightai-root-v1", "AWS profile to use for old records")
+	awsProfileNew     = flag.String("aws-profile-new", "bai-mgmt-gbl-dns-admin", "AWS profile to use for new records")
+	hostedZoneNameOld = flag.String("hosted-zone-name-old", "bright.ai.", "Hosted zone name to use for old records")
+	hostedZoneNameNew = flag.String("hosted-zone-name-new", "bright.ai.", "Hosted zone name to use for new records")
 	skipNew           = flag.Bool("skip-new", false, "Skip new records")
 	dumpJson          = flag.Bool("dump-json", true, "Dump json")
 )
@@ -55,16 +55,23 @@ func getHostedZoneId(ctx context.Context, client *route53.Client, hostedZoneName
 
 func getRecords(ctx context.Context, client *route53.Client, hostedZoneId string) (records []route53Types.ResourceRecordSet, err error) {
 	var nextRecordIdentifier *string
+	var nextRecordName *string
+	var nextRecordType route53Types.RRType
 
 	for {
-		rsp, err := client.ListResourceRecordSets(ctx, &route53.ListResourceRecordSetsInput{HostedZoneId: &hostedZoneId, StartRecordIdentifier: nextRecordIdentifier})
+		rsp, err := client.ListResourceRecordSets(ctx, &route53.ListResourceRecordSetsInput{
+			HostedZoneId:          &hostedZoneId,
+			StartRecordIdentifier: nextRecordIdentifier,
+			StartRecordName:       nextRecordName,
+			StartRecordType:       nextRecordType,
+		})
 		if err != nil {
 			return nil, err
 		}
-		nextRecordIdentifier = rsp.NextRecordIdentifier
-
 		records = append(records, rsp.ResourceRecordSets...)
-
+		nextRecordIdentifier = rsp.NextRecordIdentifier
+		nextRecordName = rsp.NextRecordName
+		nextRecordType = rsp.NextRecordType
 		if !rsp.IsTruncated {
 			return records, nil
 		}
