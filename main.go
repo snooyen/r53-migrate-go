@@ -11,16 +11,19 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/route53"
 	route53Types "github.com/aws/aws-sdk-go-v2/service/route53/types"
+	"github.com/mitchellh/mapstructure"
 	flag "github.com/spf13/pflag"
 )
 
 var (
 	awsProfileOld     = flag.String("aws-profile-old", "brightai-root-v1", "AWS profile to use for old records")
 	awsProfileNew     = flag.String("aws-profile-new", "bai-mgmt-gbl-dns-admin", "AWS profile to use for new records")
+	dumpJson          = flag.Bool("dump-json", false, "Dump Route53 records to JSON files")
 	hostedZoneNameOld = flag.String("hosted-zone-name-old", "bright.ai.", "Hosted zone name to use for old records")
 	hostedZoneNameNew = flag.String("hosted-zone-name-new", "bright.ai.", "Hosted zone name to use for new records")
+	loadRecordsOld    = flag.String("load-records-old", "", "Specifies a JSON file from which to load old records for diffing.")
+	loadRecordsNew    = flag.String("load-records-new", "", "Specifies a JSON file from which to load new records for diffing.")
 	skipNew           = flag.Bool("skip-new", false, "Skip new records")
-	dumpJson          = flag.Bool("dump-json", true, "Dump json")
 )
 
 func getR53Client(ctx context.Context, profile string) (client *route53.Client) {
@@ -78,12 +81,13 @@ func getRecords(ctx context.Context, client *route53.Client, hostedZoneId string
 	}
 }
 
+type MismatchedRecordPair struct {
+	Old route53Types.ResourceRecordSet
+	New route53Types.ResourceRecordSet
+}
 type ResourceRecordSetDiff struct {
 	Missing    []route53Types.ResourceRecordSet
-	Mismatched []struct {
-		Old route53Types.ResourceRecordSet
-		New route53Types.ResourceRecordSet
-	}
+	Mismatched []MismatchedRecordPair
 }
 
 var SkipMismatchRecordTypes = map[string]bool{
@@ -119,6 +123,30 @@ func getRecordsDiff(oldRecords []route53Types.ResourceRecordSet, newRecords []ro
 	return diff, err
 }
 
+func loadRecordsJson(filePath string) (records []route53Types.ResourceRecordSet, err error) {
+	var recordsArray []interface{}
+
+	data, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(data, &recordsArray)
+	if err != nil {
+		return
+	}
+
+	for _, recordInterface := range recordsArray {
+		record := route53Types.ResourceRecordSet{}
+		err = mapstructure.Decode(recordInterface, &record)
+		if err != nil {
+			return
+		}
+		records = append(records, record)
+	}
+
+	return records, err
+}
+
 func dumpRecordsJson(file string, data interface{}) (err error) {
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -132,27 +160,35 @@ func main() {
 	flag.Parse()
 	ctx := context.Background()
 
-	// Get R53 Clients
-	clientOld := getR53Client(ctx, *awsProfileOld)
-	clientNew := getR53Client(ctx, *awsProfileNew)
+	var oldRecords []route53Types.ResourceRecordSet
+	if *loadRecordsOld == "" {
+		clientOld := getR53Client(ctx, *awsProfileOld)
 
-	// Get Old Hosted Zone ID
-	hostedZoneIdOld, err := getHostedZoneId(ctx, clientOld, *hostedZoneNameOld)
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	log.Printf("Old Hosted Zone ID: %s", hostedZoneIdOld)
+		// Get Old Hosted Zone ID
+		hostedZoneIdOld, err := getHostedZoneId(ctx, clientOld, *hostedZoneNameOld)
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
+		log.Printf("Old Hosted Zone ID: %s", hostedZoneIdOld)
 
-	// Get Old Hosted Zone Records
-	oldRecords, err := getRecords(ctx, clientOld, hostedZoneIdOld)
-	if err != nil {
-		log.Fatal(err)
+		// Get Old Hosted Zone Records
+		oldRecords, err = getRecords(ctx, clientOld, hostedZoneIdOld)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		var err error
+		oldRecords, err = loadRecordsJson(*loadRecordsOld)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	log.Printf("Old Records Count: %d", len(oldRecords))
 
 	var newRecords []route53Types.ResourceRecordSet
-	if !*skipNew {
+	if !*skipNew && *loadRecordsNew == "" {
+		clientNew := getR53Client(ctx, *awsProfileNew)
 		// Get New Hosted Zone ID
 		hostedZoneIdNew, err := getHostedZoneId(ctx, clientNew, *hostedZoneNameNew)
 		if err != nil {
@@ -167,6 +203,12 @@ func main() {
 			log.Fatal(err)
 		}
 		log.Printf("New Records Count: %d", len(newRecords))
+	} else if *loadRecordsNew != "" {
+		var err error
+		newRecords, err = loadRecordsJson(*loadRecordsNew)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// Get Records Diff
